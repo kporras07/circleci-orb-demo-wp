@@ -1,0 +1,45 @@
+# See this example in use at https://github.com/stevector/wordpress-orb-demo
+version: 2.1
+workflows:
+  version: 2
+  build_deploy_and_test:
+    jobs:
+    - pantheon/static_tests
+    - pantheon/push:
+        # This "requires" section tells CircleCI the order in which
+        # jobs must be run.
+        requires:
+          - pantheon/static_tests
+        # Because the checkout command is called from pre-steps, it should
+        # not be run inside the orb-defined steps.
+        checkout: false
+        pre-steps:
+          # Perform a git checkout of the code from GitHub/Bitbucket so that
+          # custom commands (the rm below) can alter the code before it is
+          # pushed to Pantheon.
+          - checkout
+          - run: ./.ci/build/php
+    - pantheon/visual_regression:
+        requires:
+          - pantheon/push
+        filters:
+            branches:
+              ignore:
+                - master
+    - pantheon/behat_tests:
+        requires:
+          - pantheon/visual_regression
+
+  scheduled_update_check:
+    triggers:
+       - schedule:
+           cron: "10 21 * * *"
+           filters:
+             branches:
+              only:
+                - master
+    jobs:
+      - pantheon/composer_lock_updater
+
+orbs:
+  pantheon: kporras07/pantheon-circleci@0.0.16
